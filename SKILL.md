@@ -62,15 +62,15 @@ Use the JSON `next_actions`. Do not infer success from the app merely opening.
 - No accounts: ask the user to launch WeChat, log in, and wait for local messages to sync.
 - Data access failure: direct the user to System Settings -> Privacy & Security -> Full Disk Access, enable their terminal/Codex app, then restart it.
 
-### 3. Newer WeChat: Validate And Install A User-Provided DMG
+### 3. Newer WeChat: Download, Validate, And Install The DMG
 
-Do not download an old WeChat build from an arbitrary mirror. This skill intentionally does not bundle Tencent's proprietary installer. The tested DMG is available from Tencent's CDN:
+Do not download an old WeChat build from an arbitrary mirror. This skill intentionally does not bundle Tencent's proprietary installer or download it in the background. After the user confirms the downgrade and data backup, direct them to the tested DMG on Tencent's CDN, or accept a local copy:
 
 <https://dldir1v6.qq.com/weixin/Universal/Mac/xWeChatMac_universal_4.1.8.100_37261.dmg>
 
-Treat the URL as a convenience, not as proof of authenticity. The installer must still pass `inspect-dmg` before installation.
+Treat the URL as a download entry point, not as proof of authenticity. The installer must still pass `inspect-dmg` before installation.
 
-Ask the user to provide a trusted `xWeChatMac_universal_4.1.8.100_37261.dmg`. Before downgrade, require a current Time Machine or separate copy backup of the local `xwechat_files` directory.
+Ask the user to download `xWeChatMac_universal_4.1.8.100_37261.dmg` from the Tencent CDN above, or provide the same file from a trusted local source. Before downgrade, require a current Time Machine or separate copy backup of the local `xwechat_files` directory.
 
 Validate without installing:
 

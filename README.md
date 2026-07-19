@@ -15,7 +15,7 @@
 
 这是腾讯 CDN 的历史版本直链。下载后仍必须通过本 Skill 的 bundle ID、版本、构建号、Tencent Team ID、代码签名和 arm64 校验。
 
-新版微信通常需要先降到已验证版本。出于安全和版权考虑，本 Skill **不内置、不自动下载微信安装包**；用户可以使用上面的腾讯 CDN 直链下载，脚本会校验腾讯签名后才允许安装。
+新版微信通常需要先降到已验证版本。本 Skill **不内置微信安装包，也不会在后台自动下载**；用户确认后可以使用上面的腾讯 CDN 直链下载，Codex 会校验本地 DMG 的腾讯签名后再执行安装。
 
 ## 安装
 
@@ -32,7 +32,7 @@ bash wechat-chat-decrypt-skill/scripts/install-skill.sh
 请使用 wechat-chat-decrypt，解密并查询我当前登录的本机微信聊天记录。
 ```
 
-解压后运行：
+### 从压缩包安装
 
 ```bash
 bash /absolute/path/wechat-chat-decrypt/scripts/install-skill.sh
@@ -52,18 +52,12 @@ bash /absolute/path/to/wechat-chat-decrypt/scripts/package-skill.sh
 
 对方解压后运行压缩包内的 `scripts/install-skill.sh`，安装完成后重启 Codex。
 
-重启 Codex 后可以直接说：
-
-```text
-请使用 wechat-chat-decrypt，解密我当前登录的本机微信聊天记录。先做只读预检，任何降级、重签名和禁止更新操作都先告诉我。
-```
-
 ## 不可避免的人工步骤
 
 1. 在 macOS 设置里为 Codex/终端开启“完全磁盘访问权限”。
 2. 需要管理员权限时，由用户本人在 `sudo` 提示中输入密码，密码不会交给 Codex。
 3. 重签名或降级后，用户需要重新打开微信并登录。
-4. 如果当前微信过新，用户需要自行提供可信的 4.1.8 DMG，并在降级前确认已有数据备份。
+4. 如果当前微信过新，用户需要确认数据备份，并从上面的腾讯 CDN 直链下载 DMG；Skill 不会在后台替用户下载或安装。
 
 ## 安全设计
 

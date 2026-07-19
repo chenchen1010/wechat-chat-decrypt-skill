@@ -12,4 +12,4 @@ The vendored snapshot provides SQLCipher-compatible database decryption, query c
 
 ## WeChat
 
-WeChat is a Tencent product. No WeChat application bundle or DMG is included in this Skill. Users must obtain their own installer and remain responsible for complying with applicable laws, account terms, and data-access permissions.
+WeChat is a Tencent product. No WeChat application bundle or DMG is included in this Skill. The README and compatibility reference contain a Tencent CDN download entry point, but the Skill does not download or install it without the user's explicit confirmation. Users remain responsible for complying with applicable laws, account terms, and data-access permissions.
