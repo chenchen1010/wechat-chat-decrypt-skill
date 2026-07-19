@@ -19,6 +19,19 @@
 
 ## 安装
 
+### 从 GitHub 安装
+
+```bash
+git clone https://github.com/chenchen1010/wechat-chat-decrypt-skill.git
+bash wechat-chat-decrypt-skill/scripts/install-skill.sh
+```
+
+安装完成后重启 Codex，然后直接说：
+
+```text
+请使用 wechat-chat-decrypt，解密并查询我当前登录的本机微信聊天记录。
+```
+
 解压后运行：
 
 ```bash
