@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+
+umask 077
+
+RUNTIME_ROOT="${WECHAT_CHAT_DECRYPT_RUNTIME:-$HOME/.local/share/wechat-chat-decrypt}"
+CLI="$RUNTIME_ROOT/venv/bin/wechat-cli"
+
+if [[ ! -x "$CLI" ]]; then
+  printf '%s\n' 'Skill runtime is not installed. Run scripts/bootstrap.sh first.' >&2
+  exit 1
+fi
+
+SESSION_DIR="$(mktemp -d '/private/tmp/wechat-cli-safe.XXXXXX')"
+
+cleanup() {
+  if [[ -d "$SESSION_DIR" ]]; then
+    chmod -R u+w "$SESSION_DIR" 2>/dev/null || true
+    find "$SESSION_DIR" -depth -delete 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT HUP INT TERM
+
+TMPDIR="$SESSION_DIR" "$CLI" "$@"
