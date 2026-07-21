@@ -4,23 +4,13 @@
 
 ## 给 Claude Code / Codex 的一键提示词
 
-这个仓库是给 AI 编程助手执行的。下面这段提示词可以直接复制，不需要先编辑，也不需要填写查询目标；先让 AI 把 Skill 安装、验证和配置好，安装完成后再告诉它你要查询什么。
+这个仓库是给 AI 编程助手执行的。下面这段提示词可以直接复制；具体平台、版本、降级、更新防护和验证步骤都已经写在仓库的 `SKILL.md` 里，不需要在提示词中重复。
 
 ```text
-请帮我安装并配置这个仓库的 WeChat Chat Decrypt Skill：
+请帮我安装并使用这个仓库的 WeChat Chat Decrypt Skill：
 https://github.com/chenchen1010/wechat-chat-decrypt-skill.git
 
-请先判断这台电脑是 Windows 还是 Apple Silicon macOS，然后完成对应的安装和 bootstrap。接着运行 preflight，检查微信版本、登录状态、账号目录和加密数据库。
-
-Windows 只使用已验证的 Weixin 4.1.8.101；如果版本更高，先提醒我备份并退出微信，使用 README 中的腾讯官方安装包和 SHA-256 校验，安装并登录后在管理员 PowerShell 中运行 update-guard block。
-
-Apple Silicon macOS 只使用已验证的 WeChat 4.1.8 build 37261；如果版本更高，先提醒我备份并退出微信，使用 README 中的腾讯 DMG，先运行 inspect-dmg，验证通过并得到我的确认后再 install-dmg，重新登录后运行 resign。
-
-完成版本处理后，运行 prepare-probe、extract-keys 和 verify。只有版本兼容、密钥匹配、HMAC 验证通过、SQLite quick_check=ok 后，才算配置成功。
-
-只处理我本人拥有或明确授权的数据；不要上传或打印密钥、all_keys.json、聊天数据库和完整聊天原文；不要猜测密钥或把失败说成成功。每一步报告实际结果，需要我备份、登录、确认安装或选择账号时明确告诉我。
-
-先完成安装和验证，暂时不要查询聊天内容。完成后告诉我当前版本、验证结果和下一步我可以怎么提问。
+请按仓库 SKILL.md 的流程完成安装、bootstrap、preflight、版本兼容处理、必要的更新防护、密钥提取和验证。只处理我本人拥有或明确授权的本机微信数据，保持本地处理，不要上传或打印密钥、all_keys.json、聊天数据库和完整聊天原文。先完成安装和验证，暂时不要查询聊天内容；完成后告诉我版本、兼容性、验证结果和下一步用法。
 ```
 
 完整的分步骤版本见 [INSTALL_PROMPT.md](INSTALL_PROMPT.md)。
