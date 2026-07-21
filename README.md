@@ -29,6 +29,91 @@
 
 经典 WeChat `3.9.x` 已不在支持范围内；Windows 只走现代 Weixin `4.1.8.101` 路径。
 
+## Apple Silicon Mac：从安装到第一次查询
+
+### 1. 安装 Skill
+
+在终端中运行：
+
+```bash
+git clone https://github.com/chenchen1010/wechat-chat-decrypt-skill.git
+bash ./wechat-chat-decrypt-skill/scripts/install-skill.sh
+```
+
+安装后重启 Codex。Skill 会创建独立的本地运行环境，不会安装全局 `wechat-cli`。
+
+### 2. 使用已验证的 WeChat 版本
+
+当前 Mac 已验证版本是 **WeChat 4.1.8 build 37261**。如果检测到更新版本，先备份微信数据目录，再退出微信：
+
+```text
+~/Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files
+```
+
+从腾讯 CDN 下载已验证的 DMG：
+
+- [下载 WeChat 4.1.8 build 37261](https://dldir1v6.qq.com/weixin/Universal/Mac/xWeChatMac_universal_4.1.8.100_37261.dmg)
+
+下载只是入口，安装前仍要验证文件是否为腾讯签名的正确版本。
+
+### 3. 验证并安装 DMG
+
+```bash
+SKILL_DIR="$HOME/.codex/skills/wechat-chat-decrypt"
+PY="$HOME/.local/share/wechat-chat-decrypt/venv/bin/python"
+
+"$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" inspect-dmg \
+  --dmg "/absolute/path/to/xWeChatMac_universal_4.1.8.100_37261.dmg"
+```
+
+只有当返回结果中的 `accepted` 为 `true`，并且版本、Tencent Team ID、签名和 arm64 检查全部通过，才继续安装：
+
+```bash
+sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" install-dmg \
+  --dmg "/absolute/path/to/xWeChatMac_universal_4.1.8.100_37261.dmg" \
+  --confirm-data-backup \
+  --confirm-wechat-closed
+```
+
+安装后重新打开 WeChat、登录，然后执行本机签名步骤，让 Codex 可以读取已登录进程：
+
+```bash
+sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" resign
+```
+
+### 4. 运行预检、提取并验证
+
+```bash
+"$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" preflight
+"$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" prepare-probe \
+  --db-dir "/absolute/path/from/preflight/db_storage"
+```
+
+把 JSON 输出里的 `manifest` 路径填入：
+
+```bash
+sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" extract-keys \
+  --manifest "/private/tmp/wechat-chat-decrypt-probe-.../manifest.json"
+"$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" verify
+```
+
+### 5. 防止 Mac 自动升级并开始查询
+
+如需保持已验证版本，在明确确认后运行：
+
+```bash
+sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" update-guard block
+"$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" update-guard status
+```
+
+然后通过安全包装器查询：
+
+```bash
+"$SKILL_DIR/scripts/wechat-cli-safe" sessions --limit 20 --format text
+"$SKILL_DIR/scripts/wechat-cli-safe" history "联系人姓名" --limit 50 --format text
+"$SKILL_DIR/scripts/wechat-cli-safe" search "关键词" --chat "群聊名称" --format text
+```
+
 ## Windows：从安装到第一次查询
 
 ### 1. 安装 Skill
