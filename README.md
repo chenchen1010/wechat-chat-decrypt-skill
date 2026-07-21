@@ -4,11 +4,11 @@
 
 ## 平台
 
-- Windows 10/11：使用仓库内置的 Python 内存扫描器。已验证 Weixin 4.1.8.101（`xwechat_files\<wxid>\db_storage`，SQLCipher v4）和经典 WeChat 3.9.11.25（`Documents\WeChat Files\<wxid>\Msg`，SQLCipher v3）。现代格式可继续使用 `wechat-cli-safe.ps1` 查询；经典格式当前保证解密与 SQLite 验证，查询适配仍需按经典 `ChatMsg` schema 单独处理。
+- Windows 10/11：使用仓库内置的 Python 内存扫描器。已验证 Weixin 4.1.8.101（`xwechat_files\<wxid>\db_storage`，SQLCipher v4），并在提取前强制检查版本与登录状态。
 - Apple Silicon macOS：保留已验证的 WeChat 4.1.8 build 37261 流程。
 - Linux、Intel macOS 和 iPhone 备份不在当前支持范围内。
 
-注意：较新的 Windows Weixin 版本可能已经改变进程内存中的密钥表示。Skill 会报告检测到的版本并停止，不会猜测密钥；此时需要兼容该版本的新扫描器或经验证的旧版客户端。
+注意：较新的 Windows Weixin 版本可能已经改变进程内存中的密钥表示。Skill 会报告检测到的版本并停止，不会猜测密钥；请安装并使用已验证的 4.1.8.101。Skill 还可以用 Windows 防火墙精确阻断 `WeixinUpdate.exe` 的出站更新连接，避免降级后自动升级。
 
 ## Windows 安装
 

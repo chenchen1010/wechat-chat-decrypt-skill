@@ -44,11 +44,6 @@ class VersionTests(unittest.TestCase):
             "unsupported_newer",
         )
 
-    def test_windows_classic_client(self) -> None:
-        self.assertEqual(
-            MODULE.classify_windows_client(r"D:\\Program Files\\Tencent\\WeChat\\WeChat.exe", "3.9.11.1000"),
-            "verified_classic",
-        )
 
 
 class KeyValidationTests(unittest.TestCase):
@@ -87,20 +82,6 @@ class PageVerificationTests(unittest.TestCase):
         page[100] ^= 0x01
         self.assertFalse(MODULE.key_matches_page(key, bytes(page)))
 
-    def test_classic_sqlcipher_v3_page_hmac(self) -> None:
-        key = bytes(range(32))
-        page = bytearray(MODULE.PAGE_SIZE)
-        page[:16] = bytes(range(16, 32))
-        for index in range(16, MODULE.PAGE_SIZE - 48):
-            page[index] = index % 251
-        derived = hashlib.pbkdf2_hmac("sha1", key, page[:16], 64000, 32)
-        derived = hashlib.pbkdf2_hmac("sha1", derived, bytes(value ^ 0x3A for value in page[:16]), 2, 32)
-        digest = hmac.new(derived, page[16 : MODULE.PAGE_SIZE - 48], hashlib.sha1)
-        digest.update(struct.pack("<I", 1))
-        page[MODULE.PAGE_SIZE - 48 : MODULE.PAGE_SIZE - 28] = digest.digest()
-        self.assertTrue(MODULE.key_matches_classic_page(key, bytes(page)))
-        page[100] ^= 0x01
-        self.assertFalse(MODULE.key_matches_classic_page(key, bytes(page)))
 
 
 class FilesystemSafetyTests(unittest.TestCase):

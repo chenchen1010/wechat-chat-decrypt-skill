@@ -54,15 +54,15 @@ APP_CANDIDATES = (
     Path.home() / "Applications" / "WeChat.app",
 )
 
-WINDOWS_PROCESS_NAMES = ("Weixin.exe", "WeChat.exe")
-WINDOWS_VERIFIED_MODERN = ("4.1.8.101", "4.1.8.101")
-WINDOWS_VERIFIED_CLASSIC = ("3.9.11.1000", "3.9.11.25")
+WINDOWS_PROCESS_NAMES = ("Weixin.exe",)
+WINDOWS_VERIFIED_MODERN = ("4.1.8.101",)
 
 SPARKLE_EXECUTABLES = (
     "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate",
     "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater",
     "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer",
 )
+WINDOWS_UPDATE_RULE_PREFIX = "Codex Weixin 4.1.8.101 Update Guard"
 
 
 class SkillError(RuntimeError):
@@ -227,9 +227,6 @@ def windows_process_pids() -> list[int]:
 
 def classify_windows_client(path: str | None, version: str | None) -> str:
     """Classify only versions for which the Windows scanner was verified."""
-    process_name = Path(path).name.casefold() if path else ""
-    if process_name == "wechat.exe":
-        return "verified_classic" if version in WINDOWS_VERIFIED_CLASSIC else "unsupported_classic"
     if version in WINDOWS_VERIFIED_MODERN:
         return "verified_modern"
     if version and parse_version(version) > parse_version(WINDOWS_VERIFIED_MODERN[0]):
@@ -361,7 +358,6 @@ def expected_data_roots(home: Path) -> list[Path]:
         roots.extend(
             [
                 home / "Documents" / "xwechat_files",
-                home / "Documents" / "WeChat Files",
                 appdata / "Tencent" / "xwechat" / "xwechat_files",
             ]
         )
@@ -420,10 +416,6 @@ def discover_accounts(home: Path) -> list[dict[str, object]]:
             continue
         try:
             candidates.extend(path for path in root.glob("*/db_storage") if path.is_dir())
-            # The classic 3.x Windows client stores its account databases in
-            # Documents\\WeChat Files\\<wxid>\\Msg, rather than db_storage.
-            if root.name.casefold() == "wechat files":
-                candidates.extend(path.parent for path in root.glob("*/Msg") if path.is_dir())
         except PermissionError as exc:
             raise SkillError("Cannot read WeChat data; grant access to the Codex/terminal process") from exc
     unique: dict[str, Path] = {}
@@ -439,7 +431,7 @@ def discover_accounts(home: Path) -> list[dict[str, object]]:
                 "index": index,
                 "db_dir": str(db_dir),
                 "account_directory": db_dir.name,
-                "database_format": "wcdb_sqlcipher_v4" if (db_dir / "db_storage").is_dir() else "classic_sqlcipher_v3",
+                "database_format": "wcdb_sqlcipher_v4",
                 "last_activity": datetime.fromtimestamp(activity).astimezone().isoformat(timespec="seconds"),
                 "database_count": len(dbs),
                 "encrypted_database_count": sum(is_encrypted_database(path) for path in dbs),
@@ -505,8 +497,8 @@ def command_preflight(_: argparse.Namespace) -> None:
         next_actions.append("start_and_login_wechat")
     if system == "Windows" and not pids:
         next_actions.append("launch_weixin_and_login")
-    if system == "Windows" and windows_app and windows_app.get("compatibility") == "unsupported_newer":
-        next_actions.append("use_verified_weixin_4_1_8_101_or_classic_3_9_11")
+    if system == "Windows" and windows_app and windows_app.get("compatibility") != "verified_modern":
+        next_actions.append("use_verified_weixin_4_1_8_101")
     if len(accounts) > 1 and saved_key_count <= 0:
         next_actions.append("select_current_account")
     elif saved_key_count <= 0:
@@ -522,6 +514,7 @@ def command_preflight(_: argparse.Namespace) -> None:
             for target in targets
         )
 
+    guard_status = windows_update_guard_status() if system == "Windows" else {"hard_blocked": hard_guard}
     emit(
         {
             "ok": True,
@@ -555,7 +548,7 @@ def command_preflight(_: argparse.Namespace) -> None:
                                 / "wechat-chat-decrypt" / "venv" / "Scripts" / "wechat-cli.exe").is_file()),
                 "upstream_commit": UPSTREAM_COMMIT,
             },
-            "update_guard": {"hard_blocked": hard_guard},
+            "update_guard": guard_status,
             "next_actions": next_actions,
         }
     )
@@ -788,10 +781,9 @@ def resolve_db_dir(value: str | None, home: Path) -> Path:
     else:
         raise SkillError("Multiple accounts found; pass --db-dir for the currently logged-in account")
     roots = [root.resolve() for root in expected_data_roots(home)]
-    classic = (db_dir / "Msg").is_dir() and not (db_dir / "db_storage").is_dir()
     wcdb = db_dir.name == "db_storage"
-    if not db_dir.is_dir() or not (classic or wcdb) or not any(root in db_dir.parents for root in roots):
-        raise SkillError("database directory must belong to the current user's local WeChat data directory")
+    if not db_dir.is_dir() or not wcdb or not any(root in db_dir.parents for root in roots):
+        raise SkillError("db_storage must belong to the current user's local WeChat data directory")
     return db_dir
 
 
@@ -805,8 +797,8 @@ def command_prepare_probe(args: argparse.Namespace) -> None:
         if platform.system() != "Windows":
             probe_root.chmod(0o700)
         probe_home = probe_root / "home"
-        database_format = "classic_sqlcipher_v3" if ((db_dir / "Msg").is_dir() and not (db_dir / "db_storage").is_dir()) else "wcdb_sqlcipher_v4"
-        destination = probe_root / ("classic" if database_format.startswith("classic") else "db_storage")
+        database_format = "wcdb_sqlcipher_v4"
+        destination = probe_root / "db_storage"
         database_count = 0
         try:
             for source in database_files(db_dir):
@@ -906,7 +898,7 @@ def command_extract_keys(args: argparse.Namespace) -> None:
         db_dir = Path(str(manifest.get("db_dir", ""))).resolve(strict=True)
         roots = [root.resolve() for root in expected_data_roots(home)]
         database_format = str(manifest.get("database_format", "wcdb_sqlcipher_v4"))
-        valid_db_dir = db_dir.name == "db_storage" or ((db_dir / "Msg").is_dir() and not (db_dir / "db_storage").is_dir())
+        valid_db_dir = db_dir.name == "db_storage"
         if not valid_db_dir or not any(root in db_dir.parents for root in roots):
             raise SkillError("Probe database directory is outside the local WeChat data directory")
         probe_home = Path(str(manifest.get("probe_home", probe_root / "home"))).resolve()
@@ -923,11 +915,7 @@ def command_extract_keys(args: argparse.Namespace) -> None:
         if system == "Windows":
             windows_meta = windows_wechat_metadata([pids[0]])
             compatibility = (windows_meta or {}).get("compatibility")
-            if database_format == "classic_sqlcipher_v3" and compatibility != "verified_classic":
-                raise SkillError(
-                    f"Classic probe requires verified WeChat 3.9.11.25; detected {(windows_meta or {}).get('version') or 'unknown'}"
-                )
-            if database_format == "wcdb_sqlcipher_v4" and compatibility != "verified_modern":
+            if compatibility != "verified_modern":
                 raise SkillError(
                     f"Modern Windows probe requires verified Weixin 4.1.8.101; detected {(windows_meta or {}).get('version') or 'unknown'}"
                 )
@@ -954,8 +942,6 @@ def command_extract_keys(args: argparse.Namespace) -> None:
             # explicitly supplied --pid; keys are accepted only after DB-HMAC
             # validation, so scanning helpers does not weaken correctness.
             command = [sys.executable, "-m", "wechat_cli.keys.scanner_windows", str(scanner_db_dir), str(scanner_output_dir / "all_keys.json")]
-            if database_format == "classic_sqlcipher_v3":
-                command.append("--legacy")
             if args.pid:
                 command.extend(["--pid", str(args.pid)])
         result = run(command, timeout=300, env=environment, cwd=scanner_output_dir)
@@ -969,17 +955,14 @@ def command_extract_keys(args: argparse.Namespace) -> None:
                 metadata = windows_wechat_metadata([pids[0]])
                 version = (metadata or {}).get("version") or "unknown"
                 raise SkillError(
-                    f"No database key was found in the running Windows WeChat client {version}. The client may be unsupported or not fully logged in; keep encrypted data unchanged and try the compatible classic client path."
+                    f"No database key was found in the running Weixin.exe {version}. Keep encrypted data unchanged and use the verified Weixin 4.1.8.101 build."
                 )
             raise SkillError(f"Memory scanner failed with exit code {result.returncode}")
         scanner_keys = scanner_output_dir / "all_keys.json"
         if not scanner_keys.is_file():
             raise SkillError("Memory scanner did not create a key file")
         key_data = validate_key_data(load_json(scanner_keys))
-        if database_format == "classic_sqlcipher_v3":
-            if not any(Path(relative).parts[0].lower() == "msg" for relative in key_data):
-                raise SkillError("No classic Msg database key was matched")
-        elif not any(Path(relative).parts[0] == "message" for relative in key_data):
+        if not any(Path(relative).parts[0] == "message" for relative in key_data):
             raise SkillError("No message database key was matched")
 
         state_dir = home / ".wechat-cli"
@@ -1035,43 +1018,6 @@ def key_matches_page(enc_key: bytes, page: bytes) -> bool:
     return hmac.compare_digest(digest.digest(), page[PAGE_SIZE - 64 :])
 
 
-def key_matches_classic_page(enc_key: bytes, page: bytes) -> bool:
-    """Validate a classic 3.x SQLCipher v3 page (SHA-1/HMAC layout)."""
-    if len(enc_key) != 32 or len(page) != PAGE_SIZE:
-        return False
-    salt = page[:16]
-    derived = hashlib.pbkdf2_hmac("sha1", enc_key, salt, 64000, 32)
-    mac_salt = bytes(value ^ 0x3A for value in salt)
-    derived = hashlib.pbkdf2_hmac("sha1", derived, mac_salt, 2, 32)
-    digest = hmac.new(derived, page[16 : PAGE_SIZE - 48], hashlib.sha1)
-    digest.update(struct.pack("<I", 1))
-    return hmac.compare_digest(digest.digest(), page[PAGE_SIZE - 48 : PAGE_SIZE - 28])
-
-
-def decrypt_classic_database(source: Path, destination: Path, enc_key: bytes) -> None:
-    """Decrypt a classic WeChat SQLCipher v3 database to a temporary SQLite file."""
-    try:
-        from Crypto.Cipher import AES
-    except ImportError:
-        try:
-            from Cryptodome.Cipher import AES
-        except ImportError as exc:
-            raise SkillError("Classic Windows decryption needs pycryptodome; rerun bootstrap") from exc
-    data = source.read_bytes()
-    if len(data) < PAGE_SIZE:
-        raise SkillError("Classic database is too small for SQLite validation")
-    salt = data[:16]
-    derived = hashlib.pbkdf2_hmac("sha1", enc_key, salt, 64000, 32)
-    with destination.open("wb") as handle:
-        handle.write(SQLITE_HEADER)
-        for offset in range(0, len(data), PAGE_SIZE):
-            page = data[offset : offset + PAGE_SIZE] if offset else data[16 : PAGE_SIZE]
-            if len(page) < 48:
-                break
-            handle.write(AES.new(derived, AES.MODE_CBC, page[-48:-32]).decrypt(page[:-48]))
-            handle.write(page[-48:])
-
-
 def import_crypto_helpers():
     sys.path.insert(0, str(VENDOR_ROOT))
     try:
@@ -1092,52 +1038,6 @@ def command_verify(_: argparse.Namespace) -> None:
         roots = [root.resolve() for root in expected_data_roots(home)]
         if not any(root in db_dir.parents for root in roots):
             raise SkillError("Configured database directory is outside the local WeChat data directory")
-
-        if config.get("database_format") == "classic_sqlcipher_v3":
-            verified_paths: list[Path] = []
-            candidates: list[tuple[int, str, Path, bytes]] = []
-            for relative_path, key_info in keys.items():
-                database_path = (db_dir / relative_path).resolve()
-                if db_dir not in database_path.parents or not database_path.is_file():
-                    continue
-                enc_key = bytes.fromhex(key_info["enc_key"])
-                with database_path.open("rb") as handle:
-                    page = handle.read(PAGE_SIZE)
-                if not key_matches_classic_page(enc_key, page):
-                    continue
-                verified_paths.append(database_path)
-                if relative_path.replace("\\", "/").lower().startswith("msg/"):
-                    candidates.append((database_path.stat().st_size, relative_path, database_path, enc_key))
-            if not candidates:
-                raise SkillError("No verified classic Msg database is available for SQLite validation")
-            _, _, classic_db, classic_key = max(candidates)
-            with tempfile.TemporaryDirectory(prefix="wechat-decrypt-verify-", dir=private_temp_root()) as temp_dir:
-                decrypted_path = Path(temp_dir) / "ChatMsg.db"
-                decrypt_classic_database(classic_db, decrypted_path, classic_key)
-                connection = sqlite3.connect(f"file:{decrypted_path}?mode=ro", uri=True)
-                try:
-                    quick_check = connection.execute("PRAGMA quick_check(1)").fetchone()[0]
-                    table_count = connection.execute(
-                        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'"
-                    ).fetchone()[0]
-                finally:
-                    connection.close()
-            if quick_check != "ok":
-                raise SkillError(f"SQLite quick_check failed: {quick_check}")
-            emit(
-                {
-                    "ok": True,
-                    "database_format": "classic_sqlcipher_v3",
-                    "saved_key_count": len(keys),
-                    "hmac_verified_count": len(verified_paths),
-                    "message_database_key_count": len(candidates),
-                    "sqlite_quick_check": quick_check,
-                    "sqlite_table_count": table_count,
-                    "message_rows_read": False,
-                    "plaintext_temp_removed": True,
-                }
-            )
-            return
 
         verified_paths: list[Path] = []
         message_candidates: list[tuple[int, str, Path, bytes]] = []
@@ -1213,8 +1113,76 @@ def update_guard_status(app_path: Path) -> dict[str, object]:
     }
 
 
+def windows_update_targets() -> list[Path]:
+    """Find only the Weixin updater binaries; never block the main client."""
+    targets: list[Path] = []
+    for pid in windows_process_pids():
+        metadata = windows_wechat_metadata([pid])
+        app_path = metadata.get("path") if metadata else None
+        if app_path:
+            root = Path(str(app_path)).parent
+            targets.extend(path for path in root.rglob("WeixinUpdate.exe") if path.is_file())
+            break
+    unique: dict[str, Path] = {}
+    for path in targets:
+        unique[os.path.normcase(os.path.normpath(str(path)))] = path.resolve()
+    return sorted(unique.values(), key=lambda path: str(path).casefold())
+
+
+def windows_update_guard_status() -> dict[str, object]:
+    if platform.system() != "Windows":
+        return {"supported": False, "hard_blocked": False, "targets": []}
+    result = run(["netsh", "advfirewall", "firewall", "show", "rule", "name=all"], timeout=20)
+    blocked = WINDOWS_UPDATE_RULE_PREFIX.casefold() in (result.stdout or "").casefold()
+    targets = windows_update_targets()
+    return {
+        "supported": True,
+        "hard_blocked": blocked,
+        "rule_prefix": WINDOWS_UPDATE_RULE_PREFIX,
+        "targets": [str(path) for path in targets],
+    }
+
+
+def windows_update_guard_apply(block: bool) -> dict[str, object]:
+    targets = windows_update_targets()
+    if block and not targets:
+        raise SkillError("WeixinUpdate.exe was not found; start Weixin once, then retry update-guard block")
+    escaped_prefix = WINDOWS_UPDATE_RULE_PREFIX.replace("'", "''")
+    lines = [
+        "$ErrorActionPreference='Stop'",
+        f"$prefix='{escaped_prefix}'",
+        "Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like ($prefix+'*')} | Remove-NetFirewallRule -ErrorAction SilentlyContinue",
+    ]
+    if block:
+        lines.append("Stop-Process -Name WeixinUpdate -Force -ErrorAction SilentlyContinue")
+        for index, path in enumerate(targets):
+            escaped = str(path).replace("'", "''")
+            lines.append(
+                f"New-NetFirewallRule -DisplayName ($prefix+' [{index}]') -Direction Outbound -Action Block -Program '{escaped}' -Profile Any | Out-Null"
+            )
+    command = "; ".join(lines)
+    elevated = (
+        "([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())."
+        "IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
+    )
+    check = run(["powershell", "-NoProfile", "-Command", elevated], timeout=20)
+    if (check.stdout or "").strip().lower() != "true":
+        raise SkillError("Windows update-guard changes require an elevated PowerShell")
+    result = run(["powershell", "-NoProfile", "-Command", command], timeout=30)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise SkillError(f"Unable to change the Windows updater firewall rule: {detail}")
+    return windows_update_guard_status()
+
+
 def command_update_guard(args: argparse.Namespace) -> None:
     try:
+        if platform.system() == "Windows":
+            if args.action == "status":
+                emit({"ok": True, **windows_update_guard_status()})
+            else:
+                emit({"ok": True, **windows_update_guard_apply(args.action == "block")})
+            return
         app_path = find_wechat_app()
         if not app_path:
             raise SkillError("WeChat.app not found")
@@ -1222,8 +1190,6 @@ def command_update_guard(args: argparse.Namespace) -> None:
             emit({"ok": True, **update_guard_status(app_path)})
             return
 
-        if platform.system() == "Windows":
-            raise SkillError("update-guard is only applicable to the macOS Sparkle updater")
         uid, gid, user, home = require_root()
         state_dir = home / ".wechat-cli"
         state_dir.mkdir(parents=True, exist_ok=True)

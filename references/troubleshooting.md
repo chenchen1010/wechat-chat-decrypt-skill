@@ -2,11 +2,15 @@
 
 ## Windows: no key found
 
-Run `preflight` and record `windows_app.version`, the account directory, database format, and encrypted database count. The bundled scanner only accepts candidates that match a database-page HMAC. Weixin 4.1.8.101 uses the SQLCipher v4 scanner; classic WeChat 3.9.x uses the SQLCipher v3 pointer scanner and must be logged in. A zero-key result is a compatibility stop, not a reason to brute-force or print memory.
+Run `preflight` and record `windows_app.version`, the account directory, database format, and encrypted database count. The bundled scanner only accepts candidates that match a database-page HMAC. The only verified Windows client is Weixin 4.1.8.101. A zero-key result is a compatibility stop, not a reason to brute-force or print memory.
 
 If the error says `OpenProcess` or `ReadProcessMemory`, start WeChat and Codex/PowerShell at the same integrity level. Use Administrator PowerShell only when Windows denies access. Never disable Defender, CFG, or other kernel protections.
 
-If extraction succeeds, always run `verify` before querying. It performs HMAC checks and SQLite `quick_check` without reading message rows. The modern path can then use `wechat-cli-safe.ps1`; classic databases currently have decrypt/verify coverage but not the modern `wechat-cli` query schema.
+If extraction succeeds, always run `verify` before querying. It performs HMAC checks and SQLite `quick_check` without reading message rows.
+
+## Windows: prevent automatic upgrade
+
+After installing the verified client, run `update-guard status`. To block only the Weixin updater's outbound connections, open an elevated PowerShell and run `update-guard block`. This creates a Windows Firewall rule for the exact `WeixinUpdate.exe` path and stops a running updater process; it does not block the main Weixin client. Use `update-guard unblock` only when intentionally upgrading.
 
 ## `task_for_pid failed`
 
