@@ -10,7 +10,7 @@ If extraction succeeds, always run `verify` before querying. It performs HMAC ch
 
 ## Windows: prevent automatic upgrade
 
-After installing the verified client, run `update-guard status`. To block only the Weixin updater's outbound connections, open an elevated PowerShell and run `update-guard block`. This creates a Windows Firewall rule for the exact `WeixinUpdate.exe` path and stops a running updater process; it does not block the main Weixin client. Use `update-guard unblock` only when intentionally upgrading.
+After installing the verified client, run `update-guard status`. To block only the Weixin updater's outbound connections, open an elevated PowerShell and run `update-guard block`. This replaces old rules, targets the exact current `WeixinUpdate.exe` path, and stops a running updater process; it does not block the main Weixin client. Run it again after every reinstall or upgrade.
 
 ## `task_for_pid failed`
 
@@ -73,7 +73,13 @@ Do not scan the newer process. Run preflight, restore/provide the supported app,
 
 ## Restore Normal WeChat Updating
 
-Run:
+Windows PowerShell (管理员):
+
+```powershell
+& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') update-guard unblock
+```
+
+macOS:
 
 ```bash
 sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" update-guard unblock --enable-automatic-updates
