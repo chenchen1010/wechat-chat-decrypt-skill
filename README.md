@@ -248,4 +248,12 @@ $manifest = '<上一步返回的 manifest 路径>'
 - [Windows 实机验证记录](references/windows-run.md)
 - [故障排查](references/troubleshooting.md)
 
+## 想继续交流？
+
+这套微信聊天解密 Skill 的开源代码和安装提示词就是全部，照着提示词交给 Claude Code 或 Codex 就能用，没有隐藏步骤。
+
+**Hermes ai共学社**（知识星球，¥199）是给装完之后还想继续交流的人准备的：我会持续分享新的 workflows / skills；如果你在 Windows 或 Mac 的微信版本、降级、更新防护、本地解密和查询过程中卡住了，也可以来交流。懒得自己动手的，我也可以帮你装。
+
+加微信 **BurningChen1010**，备注「星球」。
+
 如果你要让 Codex 在另一台电脑上安装，直接把本仓库地址交给 Codex，并说明“安装并配置微信聊天解密 Skill”即可。
