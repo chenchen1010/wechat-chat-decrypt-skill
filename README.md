@@ -10,7 +10,7 @@
 请帮我安装并使用这个仓库的 WeChat Chat Decrypt Skill：
 https://github.com/chenchen1010/wechat-chat-decrypt-skill.git
 
-请按仓库 SKILL.md 的流程完成安装、bootstrap、preflight、版本兼容处理、必要的更新防护、密钥提取和验证。只处理我本人拥有或明确授权的本机微信数据，保持本地处理，不要上传或打印密钥、all_keys.json、聊天数据库和完整聊天原文。先完成安装和验证，暂时不要查询聊天内容；完成后告诉我版本、兼容性、验证结果和下一步用法。
+请按仓库 SKILL.md 的流程完成安装、bootstrap、preflight、版本兼容处理、必要的更新防护、密钥提取和验证。verify 成功后，再用仓库的安全包装器运行一次 `sessions --limit 5 --format text` 作为查询冒烟测试；只有这一步也成功，才报告“支持查询”。这次只验证会话列表，不读取、摘要或导出聊天内容。只处理我本人拥有或明确授权的本机微信数据，保持本地处理，不要上传或打印密钥、all_keys.json、聊天数据库和完整聊天原文。完成后告诉我版本、兼容性、解密验证结果、查询冒烟测试结果和下一步用法。
 ```
 
 完整的分步骤版本见 [INSTALL_PROMPT.md](INSTALL_PROMPT.md)。
