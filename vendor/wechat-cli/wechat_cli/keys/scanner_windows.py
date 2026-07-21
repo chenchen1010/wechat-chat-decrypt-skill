@@ -1,4 +1,4 @@
-"""Windows 密钥提取 — 扫描 Weixin.exe 进程内存"""
+"""Windows 密钥提取 — 扫描 WeChat.exe / Weixin.exe 进程内存"""
 
 import ctypes
 import ctypes.wintypes as wt
@@ -7,6 +7,12 @@ import os
 import re
 import subprocess
 import time
+import argparse
+import hashlib
+import hmac
+import json
+from pathlib import Path
+import struct
 
 from .common import collect_db_files, scan_memory_for_keys, cross_verify_keys, save_results
 
@@ -27,23 +33,28 @@ class MBI(ctypes.Structure):
 
 
 def _get_pids():
-    """返回所有 Weixin.exe 进程的 (pid, mem_kb) 列表，按内存降序"""
-    r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Weixin.exe", "/FO", "CSV", "/NH"],
-                       capture_output=True, text=True)
+    """返回 3.x/4.x 客户端进程的 (pid, mem_kb) 列表，按内存降序。"""
     pids = []
-    for line in r.stdout.strip().split('\n'):
-        if not line.strip():
-            continue
-        p = line.strip('"').split('","')
-        if len(p) >= 5:
-            pid = int(p[1])
-            mem = int(p[4].replace(',', '').replace(' K', '').strip() or '0')
-            pids.append((pid, mem))
+    seen = set()
+    for image_name in ("Weixin.exe", "WeChat.exe"):
+        r = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {image_name}", "/FO", "CSV", "/NH"],
+                           capture_output=True, text=True)
+        for line in r.stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            p = line.strip('"').split('","')
+            if len(p) >= 5:
+                pid = int(p[1])
+                if pid in seen:
+                    continue
+                mem = int(p[4].replace(',', '').replace(' K', '').strip() or '0')
+                pids.append((pid, mem))
+                seen.add(pid)
     if not pids:
-        raise RuntimeError("Weixin.exe 未运行")
+        raise RuntimeError("WeChat.exe / Weixin.exe 未运行")
     pids.sort(key=lambda x: x[1], reverse=True)
     for pid, mem in pids:
-        print(f"[+] Weixin.exe PID={pid} ({mem // 1024}MB)")
+        print(f"[+] WeChat PID={pid} ({mem // 1024}MB)")
     return pids
 
 
@@ -143,3 +154,112 @@ def extract_keys(db_dir, output_path, pid=None):
 
     cross_verify_keys(db_files, salt_to_dbs, key_map, print)
     return save_results(db_files, salt_to_dbs, key_map, output_path, print)
+
+
+def _legacy_read(handle, address, size):
+    buffer = ctypes.create_string_buffer(size)
+    count = ctypes.c_size_t()
+    if kernel32.ReadProcessMemory(handle, ctypes.c_uint64(address), buffer, size, ctypes.byref(count)):
+        return buffer.raw[:count.value]
+    return None
+
+
+def _legacy_module(handle):
+    """Return (base, size) for the classic client's WeChatWin.dll."""
+    psapi = ctypes.windll.psapi
+    class ModuleInfo(ctypes.Structure):
+        _fields_ = [("base", ctypes.c_void_p), ("size", wt.DWORD), ("entry", ctypes.c_void_p)]
+    modules = (ctypes.c_void_p * 1024)()
+    needed = wt.DWORD()
+    if not psapi.EnumProcessModulesEx(handle, modules, ctypes.sizeof(modules), ctypes.byref(needed), 3):
+        return None
+    count = needed.value // ctypes.sizeof(ctypes.c_void_p)
+    for module in modules[:count]:
+        name = ctypes.create_unicode_buffer(1024)
+        if not psapi.GetModuleFileNameExW(handle, module, name, len(name)):
+            continue
+        if Path(name.value).name.casefold() != "wechatwin.dll":
+            continue
+        info = ModuleInfo()
+        if psapi.GetModuleInformation(handle, module, ctypes.byref(info), ctypes.sizeof(info)):
+            return int(info.base), int(info.size)
+    return None
+
+
+def _legacy_valid(key, database):
+    try:
+        page = Path(database).read_bytes()[:4096]
+    except OSError:
+        return False
+    if len(page) != 4096 or page[:16] == b"SQLite format 3\x00":
+        return False
+    salt = page[:16]
+    derived = hashlib.pbkdf2_hmac("sha1", key, salt, 64000, 32)
+    derived = hashlib.pbkdf2_hmac("sha1", derived, bytes(value ^ 0x3A for value in salt), 2, 32)
+    digest = hmac.new(derived, page[16:4048], hashlib.sha1)
+    digest.update(b"\x01\x00\x00\x00")
+    return hmac.compare_digest(digest.digest(), page[4048:4068])
+
+
+def extract_legacy_keys(db_dir, output_path, pid=None):
+    """Scan classic WeChat.exe's WeChatWin.dll pointer layout (SQLCipher v3)."""
+    root = Path(db_dir).resolve()
+    databases = [path for path in root.rglob("*.db") if path.is_file() and path.stat().st_size >= 4096]
+    pids = [pid] if pid else [item[0] for item in _get_pids()]
+    if not databases or not pids:
+        raise RuntimeError("classic WeChat database or WeChat.exe process not found")
+    key = None
+    for process_id in pids:
+        handle = kernel32.OpenProcess(0x0010 | 0x0400, False, process_id)
+        if not handle:
+            continue
+        try:
+            module = _legacy_module(handle)
+            image = _legacy_read(handle, module[0], module[1]) if module else None
+            if not image:
+                continue
+            markers = []
+            for marker in (b"iphone\x00", b"android\x00", b"ipad\x00"):
+                offset = 0
+                while True:
+                    offset = image.find(marker, offset)
+                    if offset < 0:
+                        break
+                    markers.append(module[0] + offset)
+                    offset += 1
+            for address in sorted(markers, reverse=True):
+                for candidate in range(address, max(module[0], address - 2000), -8):
+                    pointer = _legacy_read(handle, candidate, 8)
+                    if not pointer or len(pointer) != 8:
+                        continue
+                    candidate_key = _legacy_read(handle, struct.unpack("<Q", pointer)[0], 32)
+                    if candidate_key and _legacy_valid(candidate_key, databases[0]):
+                        key = candidate_key
+                        break
+                if key:
+                    break
+        finally:
+            kernel32.CloseHandle(handle)
+        if key:
+            break
+    if not key:
+        raise RuntimeError("classic WeChat key was not found or did not validate")
+    payload = {
+        str(path.relative_to(root)).replace(os.sep, "/"): {"enc_key": key.hex()}
+        for path in databases
+    }
+    Path(output_path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return payload
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Scan a running Weixin.exe process for local database keys")
+    parser.add_argument("db_dir")
+    parser.add_argument("output_path")
+    parser.add_argument("--pid", type=int)
+    parser.add_argument("--legacy", action="store_true", help="use classic WeChat.exe SQLCipher v3 pointer scanner")
+    cli_args = parser.parse_args()
+    if cli_args.legacy:
+        extract_legacy_keys(cli_args.db_dir, cli_args.output_path, pid=cli_args.pid)
+    else:
+        extract_keys(cli_args.db_dir, cli_args.output_path, pid=cli_args.pid)

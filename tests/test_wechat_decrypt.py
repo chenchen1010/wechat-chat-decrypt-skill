@@ -9,6 +9,7 @@ import stat
 import struct
 import tempfile
 import unittest
+import os
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "wechat_decrypt.py"
@@ -29,6 +30,24 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(
             MODULE.classify_wechat_version("4.1.7", "36000"),
             "upstream_compatible_unverified",
+        )
+
+    def test_windows_verified_modern_client(self) -> None:
+        self.assertEqual(
+            MODULE.classify_windows_client(r"D:\\Program Files\\Tencent\\Weixin\\Weixin.exe", "4.1.8.101"),
+            "verified_modern",
+        )
+
+    def test_windows_newer_client_is_blocked(self) -> None:
+        self.assertEqual(
+            MODULE.classify_windows_client(r"D:\\Program Files\\Tencent\\Weixin\\Weixin.exe", "4.1.11.55"),
+            "unsupported_newer",
+        )
+
+    def test_windows_classic_client(self) -> None:
+        self.assertEqual(
+            MODULE.classify_windows_client(r"D:\\Program Files\\Tencent\\WeChat\\WeChat.exe", "3.9.11.1000"),
+            "verified_classic",
         )
 
 
@@ -68,12 +87,28 @@ class PageVerificationTests(unittest.TestCase):
         page[100] ^= 0x01
         self.assertFalse(MODULE.key_matches_page(key, bytes(page)))
 
+    def test_classic_sqlcipher_v3_page_hmac(self) -> None:
+        key = bytes(range(32))
+        page = bytearray(MODULE.PAGE_SIZE)
+        page[:16] = bytes(range(16, 32))
+        for index in range(16, MODULE.PAGE_SIZE - 48):
+            page[index] = index % 251
+        derived = hashlib.pbkdf2_hmac("sha1", key, page[:16], 64000, 32)
+        derived = hashlib.pbkdf2_hmac("sha1", derived, bytes(value ^ 0x3A for value in page[:16]), 2, 32)
+        digest = hmac.new(derived, page[16 : MODULE.PAGE_SIZE - 48], hashlib.sha1)
+        digest.update(struct.pack("<I", 1))
+        page[MODULE.PAGE_SIZE - 48 : MODULE.PAGE_SIZE - 28] = digest.digest()
+        self.assertTrue(MODULE.key_matches_classic_page(key, bytes(page)))
+        page[100] ^= 0x01
+        self.assertFalse(MODULE.key_matches_classic_page(key, bytes(page)))
+
 
 class FilesystemSafetyTests(unittest.TestCase):
     def test_private_probe_path(self) -> None:
-        path = Path(tempfile.mkdtemp(prefix="wechat-chat-decrypt-probe-", dir="/private/tmp"))
+        path = Path(tempfile.mkdtemp(prefix="wechat-chat-decrypt-probe-", dir=MODULE.private_temp_root()))
         try:
-            path.chmod(stat.S_IRWXU)
+            if os.name != "nt":
+                path.chmod(stat.S_IRWXU)
             self.assertTrue(MODULE.path_is_private_temp(path, "wechat-chat-decrypt-probe-"))
         finally:
             shutil.rmtree(path)

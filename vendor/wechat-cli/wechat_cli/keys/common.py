@@ -78,7 +78,7 @@ def scan_memory_for_keys(data, hex_re, db_files, salt_to_dbs, key_map,
                         remaining_salts.discard(salt_hex)
                         dbs = salt_to_dbs[salt_hex]
                         print_fn(f"\n  [FOUND] salt={salt_hex}")
-                        print_fn(f"    enc_key={enc_key_hex}")
+                        print_fn("    enc_key=[redacted]")
                         print_fn(f"    PID={pid} 地址: 0x{addr:016X}")
                         print_fn(f"    数据库: {', '.join(dbs)}")
                         break
@@ -94,7 +94,7 @@ def scan_memory_for_keys(data, hex_re, db_files, salt_to_dbs, key_map,
                     remaining_salts.discard(salt_hex_db)
                     dbs = salt_to_dbs[salt_hex_db]
                     print_fn(f"\n  [FOUND] salt={salt_hex_db}")
-                    print_fn(f"    enc_key={enc_key_hex}")
+                    print_fn("    enc_key=[redacted]")
                     print_fn(f"    PID={pid} 地址: 0x{addr:016X}")
                     print_fn(f"    数据库: {', '.join(dbs)}")
                     break
@@ -110,7 +110,7 @@ def scan_memory_for_keys(data, hex_re, db_files, salt_to_dbs, key_map,
                         remaining_salts.discard(salt_hex)
                         dbs = salt_to_dbs[salt_hex]
                         print_fn(f"\n  [FOUND] salt={salt_hex} (long hex {hex_len})")
-                        print_fn(f"    enc_key={enc_key_hex}")
+                        print_fn("    enc_key=[redacted]")
                         print_fn(f"    PID={pid} 地址: 0x{addr:016X}")
                         print_fn(f"    数据库: {', '.join(dbs)}")
                         break

@@ -15,6 +15,23 @@
 | Pinned commit | `a3789232d4f79bf0b30634d9dadbce71e4acd601` |
 | Upstream package version | 0.2.4 |
 
+## Windows Matrix
+
+| Component | Supported value |
+| --- | --- |
+| Platform | Windows 10/11, x64 or ARM64 Python |
+| WeChat app | Verified `Weixin.exe` 4.1.8.101; classic fallback `WeChat.exe` 3.9.11.25 |
+| Data location | Modern `xwechat_files/*/db_storage`; classic `Documents\WeChat Files\*/Msg` |
+| Database format | Modern SQLCipher v4; classic SQLCipher v3 |
+| Scanner | Bundled pure-Python `scanner_windows.py`; classic mode follows WeChatWin.dll pointer references |
+| Elevation | Same integrity level as WeChat; Administrator only when Windows denies process-memory reads |
+
+The Windows path is intentionally validated at runtime with database-page HMACs and SQLite `quick_check`. A successful memory scan with zero matched message databases is a failure, not a usable result. The modern 4.1.8.101 path has been run on a logged-in Windows machine and returned 20 matched databases with `quick_check=ok`.
+
+### Windows version caveat
+
+The modern scanner expects the legacy `x'<64-hex-key><32-hex-salt>'` representation. Weixin builds that do not expose it must stop and report the exact detected version; the Skill must not guess keys or weaken HMAC validation. Classic 3.9.x uses a separate SQLCipher v3 pointer scanner and must be fully logged in.
+
 The upstream README states WeChat for Mac 4.1.8.100 or earlier. This Skill reports older 4.x builds as `upstream_compatible_unverified` rather than claiming they were tested here.
 
 ## Why Newer WeChat Is Blocked
@@ -41,7 +58,7 @@ When updating `vendor/wechat-cli`:
 ## Unsupported In V1
 
 - Intel macOS
-- Windows and Linux automated orchestration
+- Linux automated orchestration
 - iPhone backups
 - voice-message transcription
 - OCR of image messages
