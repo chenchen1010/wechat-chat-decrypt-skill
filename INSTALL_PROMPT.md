@@ -1,14 +1,11 @@
 # 一键安装与使用提示词
 
-把下面整段复制给 Claude Code、Codex 或其他能执行本机命令的 AI 编程助手，再把最后的“我的目标”改成你的实际需求。
+把下面整段直接复制给 Claude Code、Codex 或其他能执行本机命令的 AI 编程助手，不需要提前填写查询目标。先让 AI 安装、验证和配置好 Skill，完成后再告诉它你要查询什么。
 
 ```text
 请帮我在这台电脑上安装并使用
 https://github.com/chenchen1010/wechat-chat-decrypt-skill.git
 这个 WeChat Chat Decrypt Skill。
-
-我的目标：
-【例如：查找联系人“张三”在上周的聊天，并按日期整理出待办事项】
 
 请严格按以下流程执行：
 
@@ -33,7 +30,7 @@ https://github.com/chenchen1010/wechat-chat-decrypt-skill.git
 7. 让我选择当前登录的账号（如果发现多个账号），然后运行 prepare-probe、extract-keys 和 verify。
 8. 只有在版本兼容、密钥匹配、HMAC 验证通过、SQLite quick_check=ok 后，才开始查询。
 9. 查询必须使用仓库的安全包装器，不要调用全局 wechat-cli；临时明文文件在命令结束后清理。
-10. 完成后只向我报告：版本、兼容性、匹配数据库数量、HMAC/SQLite 验证结果、更新防护状态和查询结果。
+10. 完成后只向我报告：版本、兼容性、匹配数据库数量、HMAC/SQLite 验证结果和更新防护状态。先不要查询聊天内容。
 
 安全要求：
 - 只处理我本人拥有或明确授权的数据；
