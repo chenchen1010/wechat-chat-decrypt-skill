@@ -17,7 +17,7 @@
 不要把这次结果写成“已成功解密”。要继续支持该版本，需要针对 `Weixin 4.1.11.55` 的新密钥表示/提取位置做版本化适配，或在用户明确授权后接入经过审计的兼容提取器。不能用猜测密钥、暴力破解或未经审计的第三方可执行文件替代 HMAC 和数据库完整性验证。
 ## Verified Windows paths (2026-07-20)
 
-Weixin 4.1.8.101 uses `xwechat_files\\<wxid>\\db_storage` and SQLCipher v4. Classic WeChat 3.9.11.25 uses `Documents\\WeChat Files\\<wxid>\\Msg` and SQLCipher v3. The modern logged-in run produced 20 matched keys, 20 HMAC-verified databases, and SQLite `quick_check=ok`; plaintext was removed and keys were never printed. The classic path was also verified against `ChatMsg.db` with the WeChatWin.dll pointer scanner and SQLite `quick_check=ok`.
+Weixin 4.1.8.101 uses `xwechat_files\\<wxid>\\db_storage` and SQLCipher v4. The logged-in run produced 20 matched keys, 20 HMAC-verified databases, and SQLite `quick_check=ok`; plaintext was removed and keys were never printed.
 
 ## Windows packaging note
 

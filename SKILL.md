@@ -1,11 +1,11 @@
 ---
 name: wechat-chat-decrypt
-description: Safely decrypt and query the current user's own local WeChat chat databases with Codex on Windows or Apple Silicon macOS. Use when the user explicitly asks to decrypt, search, export, or summarize local WeChat history, diagnose wechat-cli setup, locate Windows Weixin data, extract keys, or clean temporary plaintext. Windows supports the tested Weixin 4.1.8.101 SQLCipher v4 path and classic WeChat 3.9.11.25 SQLCipher v3 path; macOS targets the verified WeChat 4.1.8 build 37261 flow. Never access another person's account, device, backup, or data without explicit authorization.
+description: Safely decrypt and query the current user's own local WeChat chat databases with Codex on Windows or Apple Silicon macOS. Use when the user explicitly asks to decrypt, search, export, or summarize local WeChat history, diagnose wechat-cli setup, locate Windows Weixin data, extract keys, or clean temporary plaintext. Windows uses the verified Weixin 4.1.8.101 SQLCipher v4 path; macOS targets the verified WeChat 4.1.8 build 37261 flow. Never access another person's account, device, backup, or data without explicit authorization.
 ---
 
 # WeChat Chat Decrypt
 
-Decrypt the current user's local WeChat databases, verify the result without reading messages, and query through a short-lived plaintext cache. The workflow wraps the pinned Apache-2.0 `huohuoer/wechat-cli` snapshot with stricter path, permission, key-handling, and cleanup checks. The Windows scanner reads the current user's `Weixin.exe` or classic `WeChat.exe` process and never uploads data.
+Decrypt the current user's local WeChat databases, verify the result without reading messages, and query through a short-lived plaintext cache. The workflow wraps the pinned Apache-2.0 `huohuoer/wechat-cli` snapshot with stricter path, permission, key-handling, and cleanup checks. The Windows scanner reads the current user's `Weixin.exe` process and never uploads data.
 
 ## Hard Barriers
 
@@ -65,9 +65,9 @@ Windows: `& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') preflight`.
 Use the JSON `next_actions`. Do not infer success from the app merely opening.
 
 - `verified` (macOS): WeChat 4.1.8 build 37261, the tested version.
-- `Windows`: report detected data roots and `Weixin.exe`/`WeChat.exe` status. The bundled scanner is guarded by HMAC and SQLite verification; do not infer compatibility from a process opening successfully. The tested modern path is Weixin 4.1.8.101; the tested classic fallback is WeChat 3.9.11.25 with `Documents\WeChat Files\<wxid>\Msg` and a SQLCipher v3 pointer scanner. Extraction refuses unverified newer clients instead of scanning them blindly.
+- `Windows`: report detected data roots and `Weixin.exe` status. The bundled scanner is guarded by HMAC and SQLite verification; do not infer compatibility from a process opening successfully. The only verified Windows client is Weixin 4.1.8.101. Extraction refuses newer or unverified clients instead of scanning them blindly.
 - `upstream_compatible_unverified`: an older 4.x build covered by upstream's stated range, but not verified by this skill. Tell the user before proceeding.
-- `unsupported_newer`: do not attempt memory scanning. Follow the trusted-DMG branch.
+- `unsupported_newer`: do not attempt memory scanning. On Windows, install the verified Weixin 4.1.8.101 build; on macOS, follow the trusted-DMG branch.
 - Multiple accounts: ask which currently logged-in account to use, then pass its exact `db_dir` to `prepare-probe`.
 - No accounts: ask the user to launch WeChat, log in, and wait for local messages to sync.
 - Data access failure: on macOS grant Full Disk Access; on Windows keep Codex/PowerShell at the same integrity level as WeChat.
@@ -107,7 +107,25 @@ sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" install-dmg \
 
 This backs up the existing app bundle separately. It does not modify the chat-data directory.
 
-### 4. Re-Sign WeChat For Local Memory Access
+### 4. Windows Weixin 4.1.8.101 Installer And Update Guard
+
+Use the Tencent CDN installer below and verify its SHA-256 before running it:
+
+<https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.8.exe>
+
+Expected SHA-256: `0c4091f5480231f0805c18c845715e36a404f7447ea61fa7c8c33fbfd5707e9b`.
+
+The same installer is archived with the digest at <https://github.com/cscnk52/wechat-windows-versions/releases/tag/v4.1.8.101>. Back up the user's `xwechat_files` directory and fully quit Weixin before installing. After installation and login, block automatic upgrades before extraction:
+
+```powershell
+& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') update-guard status
+# Run the next command in an elevated PowerShell:
+& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') update-guard block
+```
+
+The guard blocks outbound traffic only for the exact `WeixinUpdate.exe` binaries and stops a running updater. It does not block Weixin's normal chat traffic. To intentionally upgrade later, run `update-guard unblock` from an elevated PowerShell.
+
+### 5. Re-Sign WeChat For Local Memory Access
 
 Explain that this modifies the local app signature, not chat data. The official signature can be restored by reinstalling WeChat from Tencent.
 
@@ -119,7 +137,7 @@ sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" resign
 
 The script preserves current entitlements, adds only `com.apple.security.get-task-allow`, and verifies the resulting signature. The user must then reopen WeChat and log in. Never request or capture the user's administrator password in chat; let `sudo` collect it interactively.
 
-### 5. Extract Keys Without Printing Them
+### 6. Extract Keys Without Printing Them
 
 #### Windows
 
@@ -131,7 +149,7 @@ $manifest = '<manifest path from the JSON output>'
 & $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') extract-keys --manifest $manifest
 ```
 
-For classic WeChat 3.9.x, select `Documents\WeChat Files\<wxid>`; the workflow automatically switches to the SQLCipher v3 scanner and validates `Msg\*.db`. For Weixin 4.1.8.101, select `xwechat_files\<wxid>\db_storage`; it uses the SQLCipher v4 scanner.
+Select `xwechat_files\<wxid>\db_storage`; the workflow uses the SQLCipher v4 scanner.
 
 If the scanner reports `OpenProcess` or `ReadProcessMemory` access denied, relaunch WeChat and Codex/PowerShell at the same integrity level, or use an Administrator PowerShell. Do not disable Defender or kernel protections.
 
@@ -153,7 +171,7 @@ sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" extract-keys \
 
 The scanner's raw output contains keys, so the wrapper captures and discards it. Successful output reports counts only. Keys and config are written to `~/.wechat-cli/` with private permissions, and any previous state is backed up locally.
 
-### 6. Verify Before Reading Messages
+### 7. Verify Before Reading Messages
 
 macOS: `"$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" verify`.
 
@@ -167,7 +185,7 @@ Acceptance requires:
 - SQLite `quick_check` equals `ok`
 - temporary plaintext removed
 
-The Windows classic verifier decrypts a temporary `Msg` database and runs SQLite `quick_check`; no message rows are returned during verification.
+The Windows verifier decrypts a temporary message database and runs SQLite `quick_check`; no message rows are returned during verification.
 
 This command does not read message rows or contact names.
 
@@ -177,7 +195,7 @@ To create a clean shareable archive from a checkout, run:
 bash "$SKILL_DIR/scripts/package-skill.sh" "/absolute/path/to/wechat-chat-decrypt-skill.zip"
 ```
 
-### 7. Block Automatic Upgrade When A Downgrade Was Required
+### 8. macOS Update Guard
 
 Ask for explicit confirmation before changing update behavior. Then:
 
@@ -197,7 +215,7 @@ Restore updater permissions before intentionally updating:
 sudo "$PY" "$SKILL_DIR/scripts/wechat_decrypt.py" update-guard unblock --enable-automatic-updates
 ```
 
-### 8. Query Through The Safe Wrapper
+### 9. Query Through The Safe Wrapper
 
 Always use the safe wrapper; do not call a global `wechat-cli`. It gives each command a private temporary directory and removes plaintext databases when the command exits.
 
@@ -221,7 +239,7 @@ Windows PowerShell:
 
 Only read or summarize the date range and chats the user asked for. For broad requests, state the time range, separate private chats from groups, exclude passive broadcasts, and note that voice messages are not transcribed automatically.
 
-### 9. Clean Up
+### 10. Clean Up
 
 After ordinary querying, the safe wrapper cleans itself. Audit and remove leftovers with:
 

@@ -20,17 +20,29 @@
 | Component | Supported value |
 | --- | --- |
 | Platform | Windows 10/11, x64 or ARM64 Python |
-| WeChat app | Verified `Weixin.exe` 4.1.8.101; classic fallback `WeChat.exe` 3.9.11.25 |
-| Data location | Modern `xwechat_files/*/db_storage`; classic `Documents\WeChat Files\*/Msg` |
-| Database format | Modern SQLCipher v4; classic SQLCipher v3 |
-| Scanner | Bundled pure-Python `scanner_windows.py`; classic mode follows WeChatWin.dll pointer references |
+| WeChat app | Verified `Weixin.exe` 4.1.8.101 |
+| Data location | User-owned `xwechat_files/*/db_storage`, discovered from `%APPDATA%\Tencent\xwechat\config\*.ini` |
+| Database format | SQLCipher v4 |
+| Scanner | Bundled pure-Python `scanner_windows.py` using `OpenProcess`/`ReadProcessMemory` |
 | Elevation | Same integrity level as WeChat; Administrator only when Windows denies process-memory reads |
+
+### Windows installer
+
+The verified installer is available from Tencent's CDN:
+
+`https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.8.exe`
+
+Expected SHA-256:
+
+`0c4091f5480231f0805c18c845715e36a404f7447ea61fa7c8c33fbfd5707e9b`
+
+The archive release also provides a GitHub-hosted copy and records the same URL and digest: <https://github.com/cscnk52/wechat-windows-versions/releases/tag/v4.1.8.101>.
 
 The Windows path is intentionally validated at runtime with database-page HMACs and SQLite `quick_check`. A successful memory scan with zero matched message databases is a failure, not a usable result. The modern 4.1.8.101 path has been run on a logged-in Windows machine and returned 20 matched databases with `quick_check=ok`.
 
 ### Windows version caveat
 
-The modern scanner expects the legacy `x'<64-hex-key><32-hex-salt>'` representation. Weixin builds that do not expose it must stop and report the exact detected version; the Skill must not guess keys or weaken HMAC validation. Classic 3.9.x uses a separate SQLCipher v3 pointer scanner and must be fully logged in.
+The scanner expects the legacy `x'<64-hex-key><32-hex-salt>'` representation. Weixin builds that do not expose it must stop and report the exact detected version; the Skill must not guess keys or weaken HMAC validation.
 
 The upstream README states WeChat for Mac 4.1.8.100 or earlier. This Skill reports older 4.x builds as `upstream_compatible_unverified` rather than claiming they were tested here.
 
