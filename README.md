@@ -1,90 +1,47 @@
 # WeChat Chat Decrypt Skill
 
-让 Codex 在用户自己的 Mac 上完成微信聊天数据库取钥、校验和本地查询。数据不上传，查询产生的明文数据库默认随命令退出清理。
+让 Codex 在用户自己的电脑上本地解密并查询微信聊天数据库。数据、密钥和导出内容不会上传。
 
-## 已验证范围
+## 平台
 
-- Apple Silicon Mac
-- macOS 26.3.1 或更高（沿用上游要求）
-- 微信 Mac 版 4.1.8，构建号 37261（安装包常见名称为 `4.1.8.100_37261`）
-- 上游：`huohuoer/wechat-cli`，固定提交 `a3789232d4f79bf0b30634d9dadbce71e4acd601`
+- Windows 10/11：使用仓库内置的 Python 内存扫描器。已验证 Weixin 4.1.8.101（`xwechat_files\<wxid>\db_storage`，SQLCipher v4）和经典 WeChat 3.9.11.25（`Documents\WeChat Files\<wxid>\Msg`，SQLCipher v3）。现代格式可继续使用 `wechat-cli-safe.ps1` 查询；经典格式当前保证解密与 SQLite 验证，查询适配仍需按经典 `ChatMsg` schema 单独处理。
+- Apple Silicon macOS：保留已验证的 WeChat 4.1.8 build 37261 流程。
+- Linux、Intel macOS 和 iPhone 备份不在当前支持范围内。
 
-4.1.8.100 build 37261 DMG：
+注意：较新的 Windows Weixin 版本可能已经改变进程内存中的密钥表示。Skill 会报告检测到的版本并停止，不会猜测密钥；此时需要兼容该版本的新扫描器或经验证的旧版客户端。
 
-<https://dldir1v6.qq.com/weixin/Universal/Mac/xWeChatMac_universal_4.1.8.100_37261.dmg>
+## Windows 安装
 
-这是腾讯 CDN 的历史版本直链。下载后仍必须通过本 Skill 的 bundle ID、版本、构建号、Tencent Team ID、代码签名和 arm64 校验。
+在 PowerShell 中运行：
 
-新版微信通常需要先降到已验证版本。本 Skill **不内置微信安装包，也不会在后台自动下载**；用户确认后可以使用上面的腾讯 CDN 直链下载，Codex 会校验本地 DMG 的腾讯签名后再执行安装。
-
-## 安装
-
-### 从 GitHub 安装
-
-```bash
+```powershell
 git clone https://github.com/chenchen1010/wechat-chat-decrypt-skill.git
-bash wechat-chat-decrypt-skill/scripts/install-skill.sh
+& .\wechat-chat-decrypt-skill\scripts\install-skill.ps1
 ```
 
-安装完成后重启 Codex，然后直接说：
+安装后重启 Codex。首次使用时：
 
-```text
-请使用 wechat-chat-decrypt，解密并查询我当前登录的本机微信聊天记录。
+```powershell
+$SkillDir = Join-Path $env:USERPROFILE '.codex\skills\wechat-chat-decrypt'
+$Py = Join-Path $env:LOCALAPPDATA 'wechat-chat-decrypt\venv\Scripts\python.exe'
+& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') preflight
+& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') prepare-probe
+# 使用上一步 JSON 返回的 manifest 路径
+& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') extract-keys --manifest '<manifest path>'
+& $Py (Join-Path $SkillDir 'scripts\wechat_decrypt.py') verify
 ```
 
-### 从压缩包安装
+保持微信处于已登录状态。若出现 `OpenProcess`/`ReadProcessMemory` 权限错误，让 Codex、PowerShell 和微信处于相同权限级别；仅在 Windows 明确拒绝访问时使用管理员 PowerShell。不要关闭 Defender 或内核保护。
 
-```bash
-bash /absolute/path/wechat-chat-decrypt/scripts/install-skill.sh
+查询必须使用安全包装器，它会为每次命令创建临时解密缓存并在退出时删除：
+
+```powershell
+& (Join-Path $SkillDir 'scripts\wechat-cli-safe.ps1') sessions --limit 20 --format text
+& (Join-Path $SkillDir 'scripts\wechat-cli-safe.ps1') history '联系人' --limit 50 --format text
 ```
 
-安装位置：
+## 安全边界
 
-```text
-~/.codex/skills/wechat-chat-decrypt
-```
+仅处理当前用户拥有或明确获授权的数据；不打印 `all_keys.json`，不把聊天原文、密钥或凭据提交到 Git。运行 `cleanup --include-probes` 可清理残留临时目录。
 
-如果要分享给别人，先在本目录的上一级生成一个干净压缩包：
-
-```bash
-bash /absolute/path/to/wechat-chat-decrypt/scripts/package-skill.sh
-```
-
-对方解压后运行压缩包内的 `scripts/install-skill.sh`，安装完成后重启 Codex。
-
-## 不可避免的人工步骤
-
-1. 在 macOS 设置里为 Codex/终端开启“完全磁盘访问权限”。
-2. 需要管理员权限时，由用户本人在 `sudo` 提示中输入密码，密码不会交给 Codex。
-3. 重签名或降级后，用户需要重新打开微信并登录。
-4. 如果当前微信过新，用户需要确认数据备份，并从上面的腾讯 CDN 直链下载 DMG；Skill 不会在后台替用户下载或安装。
-
-## 安全设计
-
-- 仅允许当前 macOS 用户的本地微信容器。
-- 取钥脚本捕获并丢弃会暴露密钥的原始扫描输出。
-- `~/.wechat-cli` 使用私有权限，旧配置自动本地备份。
-- 查询使用独立临时目录，退出时删除解密数据库。
-- 不会自动上传、发送或修改微信消息。
-- 安装包必须通过 bundle ID、版本、构建号、腾讯 Team ID、签名和 arm64 校验。
-
-## 目录
-
-```text
-wechat-chat-decrypt/
-├── SKILL.md
-├── README.md
-├── scripts/
-│   ├── bootstrap.sh
-│   ├── install-skill.sh
-│   ├── package-skill.sh
-│   ├── wechat-cli-safe
-│   └── wechat_decrypt.py
-├── references/
-├── tests/
-└── vendor/wechat-cli/
-```
-
-## 许可与来源
-
-本包装层采用 Apache-2.0。内置的 `wechat-cli` 快照同样为 Apache-2.0，来源与固定提交见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。微信客户端属于腾讯，本项目不分发微信安装包。
+详细流程见 [SKILL.md](SKILL.md)，平台差异见 [references/compatibility.md](references/compatibility.md)。

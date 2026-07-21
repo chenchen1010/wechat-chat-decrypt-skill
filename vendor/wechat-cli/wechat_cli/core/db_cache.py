@@ -10,8 +10,13 @@ from .key_utils import get_key_info
 
 
 class DBCache:
-    CACHE_DIR = os.path.join(tempfile.gettempdir(), "wechat_cli_cache")
-    MTIME_FILE = os.path.join(tempfile.gettempdir(), "wechat_cli_cache", "_mtimes.json")
+    # The safe wrapper sets this to a per-command directory. Keep the legacy
+    # location only for direct upstream CLI use.
+    CACHE_DIR = os.environ.get(
+        "WECHAT_CLI_CACHE_DIR",
+        os.path.join(tempfile.gettempdir(), "wechat_cli_cache"),
+    )
+    MTIME_FILE = os.path.join(CACHE_DIR, "_mtimes.json")
 
     def __init__(self, all_keys, db_dir):
         self._all_keys = all_keys

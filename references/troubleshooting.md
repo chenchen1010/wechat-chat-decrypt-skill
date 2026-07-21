@@ -1,5 +1,13 @@
 # Troubleshooting
 
+## Windows: no key found
+
+Run `preflight` and record `windows_app.version`, the account directory, database format, and encrypted database count. The bundled scanner only accepts candidates that match a database-page HMAC. Weixin 4.1.8.101 uses the SQLCipher v4 scanner; classic WeChat 3.9.x uses the SQLCipher v3 pointer scanner and must be logged in. A zero-key result is a compatibility stop, not a reason to brute-force or print memory.
+
+If the error says `OpenProcess` or `ReadProcessMemory`, start WeChat and Codex/PowerShell at the same integrity level. Use Administrator PowerShell only when Windows denies access. Never disable Defender, CFG, or other kernel protections.
+
+If extraction succeeds, always run `verify` before querying. It performs HMAC checks and SQLite `quick_check` without reading message rows. The modern path can then use `wechat-cli-safe.ps1`; classic databases currently have decrypt/verify coverage but not the modern `wechat-cli` query schema.
+
 ## `task_for_pid failed`
 
 1. Confirm the app version is supported.
@@ -43,7 +51,10 @@ This is not automatically a failure. Small ancillary databases may not have a li
 Run:
 
 ```bash
-bash "$SKILL_DIR/scripts/bootstrap.sh"
+  # Windows PowerShell:
+  & (Join-Path $SKILL_DIR 'scripts\bootstrap.ps1')
+  # macOS/Linux:
+  bash "$SKILL_DIR/scripts/bootstrap.sh"
 ```
 
 Then retry with the runtime Python at:
